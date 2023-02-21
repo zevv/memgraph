@@ -148,12 +148,11 @@ proc handle_rec(g: var Grapher, rec: Record) =
 # Grapher main loop: read records from hook and process
 
 proc grapher(fd: cint) =
-
-  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) and not O_NONBLOCK)
   
   log "start"
   log "memMax: " & $(memMax div 1024) & " kB"
 
+  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) and not O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
   var g = Grapher()
@@ -164,17 +163,19 @@ proc grapher(fd: cint) =
   g.ffmpeg = start_ffmpeg()
 
   while true:
-    var recs: array[256, Record]
+    var recs: array[2048, Record]
     let r = read(fd, recs.addr, recs.sizeof)
 
     if r > 0:
       let nrecs = r div Record.sizeof
       for i in 0..<nrecs:
         g.handle_rec(recs[i])
+
     elif r == 0:
       if g.t_exit == 0.0:
         g.t_exit = epochTime() + 1
       os.sleep(int(interval * 1000))
+
     else:
       os.sleep(int(interval * 1000))
 
