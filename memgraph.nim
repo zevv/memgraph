@@ -7,9 +7,10 @@ const
   width = 512
   height = 512
   idxMax = width * height
-  blockSize = 4096
+  blockSize = 8192
   memMax = idxMax * blockSize
-  interval = 1 / 60.0
+  fps = 20.0
+  interval = 1.0 / fps
 
 
 type
@@ -33,7 +34,7 @@ proc start_ffmpeg(): File =
     var cmd = "ffmpeg"
     cmd.add " -f rawvideo -vcodec rawvideo"
     cmd.add " -s " & $width & "x" & $height
-    cmd.add " -pix_fmt rgba -r 30"
+    cmd.add " -pix_fmt rgba -r " & $fps
     cmd.add " -i - "
     cmd.add " -an -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
     cmd.add " -y"
@@ -82,12 +83,11 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
 
 
 proc setMap(g: var Grapher, p: pointer, size: csize_t, val: uint8) =
-  let pu = cast[uint](p)
-  let rp = pu - g.heapStart
+  let pRel = cast[uint](p) - g.heapStart
 
-  if not g.pixels.isNil and rp < memMax:
+  if not g.pixels.isNil and pRel < memMax:
     let nblocks = size.int div blockSize
-    let idx = rp.int div blockSize
+    let idx = pRel.int div blockSize
 
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:

@@ -1,7 +1,7 @@
 
 NIMFLAGS += --debugger:native
-NIMFLAGS += --panics:off
-NIMFLAGS += -d:usemalloc -d:danger
+NIMFLAGS += -d:usemalloc
+NIMFLAGS += -d:danger
 
 all: libmemgraph.so memgraph
 
