@@ -1,11 +1,12 @@
 
 import std/posix
+import std/envvars
 import posix/linux
 import grapher
 import types
 
 type
-  State = enum Init, Hooking, Hooked, Running
+  State = enum Init, Hooking, Hooked, Running, Disabled
 
 var
   state: State = Init
@@ -45,7 +46,7 @@ proc mark_free(p: pointer) =
 proc installHooks() =
 
   if state == Init:
-
+ 
     state = Hooking
 
     proc dlsym(handle: pointer, symbol: cstring): pointer {.importc,header:"dlfcn.h".}
@@ -60,6 +61,8 @@ proc installHooks() =
     state = Hooked
 
   if state == Hooked:
+
+    delEnv("LD_PRELOAD")
 
     # TODO: This is a hack: dlopen() is used by nim to open the SDL
     # library, but dlopen() itself calls malloc. Ignore the first few
@@ -79,8 +82,7 @@ proc installHooks() =
         exitnow(0)
       else:
         discard close(fds[0])
-
-      state = Running
+        state = Running
 
 
 # LD_PRELOAD hooks

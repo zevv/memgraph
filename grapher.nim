@@ -1,5 +1,5 @@
 
-import std / [tables, strutils, posix, times, os]
+import std / [tables, strutils, posix, times, os, syncio]
 import pkg / sdl2_nim / sdl
 import types
 
@@ -21,8 +21,9 @@ type
     win: sdl.Window
     rend: sdl.Renderer
     tex: sdl.Texture
-    map: ptr UncheckedArray[uint8]
+    pixels: ptr UncheckedArray[uint32]
     t_draw: float
+    ffmpeg: File
 
 
 
@@ -54,31 +55,30 @@ proc hilbert(n: cint, xp, yp: ptr cint) =
                       
 
 
-proc setPoint(g: var Grapher, idx: int, val: uint8) =
+proc setPoint(g: var Grapher, idx: int, val: uint32) =
   if idx < idxMax:
     var x, y: cint
     when true:
       hilbert(idx, x.addr, y.addr)
-      g.map[y*width + x] = val
+      g.pixels[y*width + x] = val
     else:
-      g.map[idx] = val
+      g.pixels[idx] = val
 
 
 proc setMap(g: var Grapher, p: pointer, size: csize_t, val: uint8) =
   let pu = cast[uint](p)
-  # TODO: the mod is a hack, this needs to able to handle multiple heaps
-  let rp = (pu - g.heapStart) mod memMax
+  let rp = pu - g.heapStart
 
-  if not g.map.isNil and rp < memMax:
+  if not g.pixels.isNil and rp < memMax:
     let nblocks = size.int div blockSize
     let idx = rp.int div blockSize
 
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:
         if val == 0:
-          g.setPoint(idx+i, 0x01)
+          g.setPoint(idx+i, 0x222222)
         else:
-          g.setPoint(idx+i, 0xff)
+          g.setPoint(idx+i, 0xcccccc)
 
 
 
@@ -93,9 +93,11 @@ proc drawMap(g: var Grapher) =
   var pitch: cint
   discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
 
-  g.map = cast[ptr UncheckedArray[uint8]](pixels)
+  g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
   log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
 
+  if not g.ffmpeg.isNil:
+    let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
 
 
 
@@ -120,6 +122,20 @@ proc handle_rec(g: var Grapher, rec: Record) =
 
 
 
+proc start_ffmpeg(): File =
+  let fname = getEnv("MEMGRAPH_MP4")
+  if fname != "":
+    var cmd = "ffmpeg"
+    cmd.add " -f rawvideo -vcodec rawvideo"
+    cmd.add " -s " & $width & "x" & $height
+    cmd.add " -pix_fmt rgba -r 30"
+    cmd.add " -i - "
+    cmd.add " -an -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
+    cmd.add " -y"
+    cmd.add " " & fname
+    log cmd
+    result = popen(cmd.cstring, "w")
+
 # Grapher main loop: read records from hook and process
 
 proc grapher2(fd: cint) =
@@ -133,13 +149,15 @@ proc grapher2(fd: cint) =
 
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 1024, 1024, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
-  g.tex = createTexture(g.rend, PIXELFORMAT_RGB332, TEXTUREACCESS_STREAMING, width, height)
+  g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
+  g.ffmpeg = start_ffmpeg()
 
   # Find the start of the heap
   for l in lines("/proc/self/maps"):
     if l.contains("[heap]"):
       let ps = l.split("-")
       g.heapStart = fromHex[int](ps[0]).uint
+      log toHex(g.heapStart)
       break
 
   while true:
@@ -148,6 +166,7 @@ proc grapher2(fd: cint) =
 
     if r > 0:
       let nrecs = r div Record.sizeof
+      echo "got ", nrecs
       for i in 0..<nrecs:
         g.handle_rec(recs[i])
     elif r == 0:
