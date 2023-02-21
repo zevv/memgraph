@@ -8,7 +8,7 @@ nim c -d:release -d:usemalloc --mm:arc tests/tmillions.nim
 
 ```
 make 
-LD_PRELOAD=./libmemgraph.so /tmp/tmillions
+PATH=$PATH:. MEMGRAPH_MP4=memgraph.mp4 LD_PRELOAD=./libmemgraph.so GLIBC_TUNABLES=glibc.malloc.mmap_max=0:glibc.malloc.arena_max=1 ~/sandbox/prjs/actors/tests/tmillions 
 ```
 
 Enable recording with:
