@@ -39,11 +39,11 @@ proc start_ffmpeg(): File =
     cmd.add " -s " & $width & "x" & $height
     cmd.add " -pix_fmt rgba -r " & $fps
     cmd.add " -i - "
-    cmd.add " -i http://zevv.nl/div/.old/memgraph.mp3"
+    #cmd.add " -i http://zevv.nl/div/.old/memgraph.mp3"
     cmd.add " -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
-    cmd.add " -c:a copy"
-    cmd.add " -shortest"
-    cmd.add " -map 0:0 -map 1:0"
+    #cmd.add " -c:a copy"
+    #cmd.add " -shortest"
+    #cmd.add " -map 0:0 -map 1:0"
     cmd.add " -y"
     cmd.add " -loglevel warning"
     cmd.add " " & fname
