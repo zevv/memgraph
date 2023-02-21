@@ -7,10 +7,13 @@ const
   width = 512
   height = 512
   idxMax = width * height
-  blockSize = 8192
-  memMax = idxMax * blockSize
   fps = 20.0
   interval = 1.0 / fps
+
+var
+  memMaxDefault = "1024"
+  memMax: uint = (getEnv("MEMGRAPH_MEM_MAX", memMaxDefault).parseInt() * 1024 * 1024).uint
+  blockSize = (memMax div idxMax).int
 
 
 type
@@ -36,7 +39,11 @@ proc start_ffmpeg(): File =
     cmd.add " -s " & $width & "x" & $height
     cmd.add " -pix_fmt rgba -r " & $fps
     cmd.add " -i - "
-    cmd.add " -an -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
+    cmd.add " -i http://zevv.nl/div/.old/memgraph.mp3"
+    cmd.add " -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
+    cmd.add " -c:a copy"
+    cmd.add " -shortest"
+    cmd.add " -map 0:0 -map 1:0"
     cmd.add " -y"
     cmd.add " -loglevel warning"
     cmd.add " " & fname
@@ -155,7 +162,8 @@ proc handle_rec(g: var Grapher, rec: Record) =
       g.setMap(rec.p, size, 0)
       g.allocations.del rec.p
     else:
-      log "unknown " & rec.p.repr
+      #log "unknown " & rec.p.repr
+      discard
 
 
 
