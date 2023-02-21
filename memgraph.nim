@@ -7,7 +7,6 @@ type
 
   Grapher = object
     allocations: Table[pointer, csize_t]
-    heapStart: uint
     bytesAllocated: uint
     win: sdl.Window
     rend: sdl.Renderer
@@ -22,7 +21,7 @@ const
   width = 512
   height = 512
   idxMax = width * height
-  fps = 20.0
+  fps = 30.0
   interval = 1.0 / fps
   colorMap = [
     0x00BDEB, 0x00BDEB, 0x0096FF, 0xE427FF, 0xFF00D5,
@@ -60,16 +59,17 @@ proc log(s: string) =
   stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
 
 
-proc hilbert(n: cint, xp, yp: ptr cint) =
+proc hilbert(n: int, x, y: var int) =
 
   const
     transform_table = [[0,1,2,3],[0,2,1,3],[3,2,1,0],[3,1,2,0]]
     locations = [0,1,3,2]
     transforms = [1,0,0,3]
 
-  var
-    x, y, trans: int
-    i = 30
+  x = 0
+  y = 0
+  var trans = 0
+  var i = 16
 
   while i >= 0:
     let m = (n shr i) and 3
@@ -79,23 +79,19 @@ proc hilbert(n: cint, xp, yp: ptr cint) =
     trans = trans xor transforms[m]
     i -= 2
 
-  xp[] = x
-  yp[] = y
-                      
-
 
 proc setPoint(g: var Grapher, idx: int, val: uint32) =
   if idx < idxMax:
-    var x, y: cint
+    var x, y: int
     when true:
-      hilbert(idx, x.addr, y.addr)
+      hilbert(idx, x, y)
       g.pixels[y*width + x] = val
     else:
       g.pixels[idx] = val
 
 
 proc setMap(g: var Grapher, p: pointer, size: csize_t, val: int) =
-  let pRel = (cast[uint](p) - g.heapStart) mod memMax
+  let pRel = cast[uint](p) mod memMax
 
   if not g.pixels.isNil and pRel < memMax:
     let nblocks = size.int div blockSize
@@ -133,11 +129,6 @@ proc drawMap(g: var Grapher) =
 # Handle one alloc/free record
 
 proc handle_rec(g: var Grapher, rec: Record) =
-
-  #echo rec.p.repr, " ", rec.size
-
-  if g.heapStart == 0:
-    g.heapStart = cast[uint](rec.p)
 
   if rec.size > 0:
     # Handle alloc
@@ -206,3 +197,4 @@ proc grapher(fd: cint) =
 
 
 grapher(0)
+
