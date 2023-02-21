@@ -7,6 +7,7 @@ import types
 var
   fd_pipe: cint
   calls: int
+  tid {.threadvar.}: int
 
 type
   fnMalloc = proc(size: csize_t): pointer {.cdecl.}
@@ -27,10 +28,12 @@ proc sendRec(rec: Record) =
   discard write(fd_pipe, rec.addr, rec.sizeof)
 
 proc mark_alloc(p: pointer, size: csize_t) =
-  sendRec Record(p: p, size: size)
+  if tid == 0:
+    tid = getThreadId()
+  sendRec Record(p: p, size: size, tid: tid)
 
 proc mark_free(p: pointer) =
-  sendRec Record(p: p, size: 0)
+  sendRec Record(p: p, size: 0, tid: tid)
 
 
 # Install LD_PRELOAD hooks and fork grapher

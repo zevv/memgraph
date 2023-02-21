@@ -44,6 +44,19 @@ proc start_ffmpeg(): File =
     result = popen(cmd.cstring, "w")
 
 
+const colorMap = [
+  0x00BDEB,
+  0x00BDEB,
+  0x0096FF,
+  0xE427FF,
+  0xFF00D5,
+  0xFF4454,
+  0xDB7B00,
+  0x8F9C00,
+  0x00B300,
+  0x00C083,
+]
+
 proc log(s: string) =
   stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
 
@@ -82,8 +95,8 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
       g.pixels[idx] = val
 
 
-proc setMap(g: var Grapher, p: pointer, size: csize_t, val: uint8) =
-  let pRel = cast[uint](p) - g.heapStart
+proc setMap(g: var Grapher, p: pointer, size: csize_t, val: int) =
+  let pRel = (cast[uint](p) - g.heapStart) mod memMax
 
   if not g.pixels.isNil and pRel < memMax:
     let nblocks = size.int div blockSize
@@ -94,7 +107,8 @@ proc setMap(g: var Grapher, p: pointer, size: csize_t, val: uint8) =
         if val == 0:
           g.setPoint(idx+i, 0x222222)
         else:
-          g.setPoint(idx+i, 0xcccccc)
+          let color = colorMap[val mod 8]
+          g.setPoint(idx+i, color.uint32)
 
 
 
@@ -110,7 +124,7 @@ proc drawMap(g: var Grapher) =
   discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
 
   g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
-  log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
+  #log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
 
   if not g.ffmpeg.isNil:
     let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
@@ -130,7 +144,7 @@ proc handle_rec(g: var Grapher, rec: Record) =
     # Handle alloc
     g.bytesAllocated += rec.size
     g.allocations[rec.p] = rec.size
-    g.setMap(rec.p, rec.size, 1)
+    g.setMap(rec.p, rec.size, rec.tid)
 
   else:
     # Handle free
