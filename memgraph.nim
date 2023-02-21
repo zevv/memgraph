@@ -3,19 +3,6 @@ import std / [tables, strutils, posix, times, os, syncio]
 import pkg / sdl2_nim / sdl
 import types
 
-const
-  width = 512
-  height = 512
-  idxMax = width * height
-  fps = 20.0
-  interval = 1.0 / fps
-
-var
-  memMaxDefault = "1024"
-  memMax: uint = (getEnv("MEMGRAPH_MEM_MAX", memMaxDefault).parseInt() * 1024 * 1024).uint
-  blockSize = (memMax div idxMax).int
-
-
 type
 
   Grapher = object
@@ -31,13 +18,31 @@ type
     ffmpeg: File
 
 
+const
+  width = 512
+  height = 512
+  idxMax = width * height
+  fps = 20.0
+  interval = 1.0 / fps
+  colorMap = [
+    0x00BDEB, 0x00BDEB, 0x0096FF, 0xE427FF, 0xFF00D5,
+    0xFF4454, 0xDB7B00, 0x8F9C00, 0x00B300, 0x00C083,
+  ]
+
+
+var
+  memMaxDefault = "1024"
+  memMax: uint = (getEnv("MEMGRAPH_MEM_MAX", memMaxDefault).parseInt() * 1024 * 1024).uint
+  blockSize = (memMax div idxMax).int
+
+
 proc start_ffmpeg(): File =
   let fname = getEnv("MEMGRAPH_MP4")
   if fname != "":
     var cmd = "ffmpeg"
     cmd.add " -f rawvideo -vcodec rawvideo"
     cmd.add " -s " & $width & "x" & $height
-    cmd.add " -pix_fmt rgba -r " & $fps
+    cmd.add " -pix_fmt bgra -r " & $fps
     cmd.add " -i - "
     #cmd.add " -i http://zevv.nl/div/.old/memgraph.mp3"
     cmd.add " -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
@@ -50,19 +55,6 @@ proc start_ffmpeg(): File =
     log cmd
     result = popen(cmd.cstring, "w")
 
-
-const colorMap = [
-  0x00BDEB,
-  0x00BDEB,
-  0x0096FF,
-  0xE427FF,
-  0xFF00D5,
-  0xFF4454,
-  0xDB7B00,
-  0x8F9C00,
-  0x00B300,
-  0x00C083,
-]
 
 proc log(s: string) =
   stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
@@ -114,7 +106,7 @@ proc setMap(g: var Grapher, p: pointer, size: csize_t, val: int) =
         if val == 0:
           g.setPoint(idx+i, 0x222222)
         else:
-          let color = colorMap[val mod 8]
+          let color = colorMap[val mod 10]
           g.setPoint(idx+i, color.uint32)
 
 
