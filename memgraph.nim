@@ -6,7 +6,7 @@ import types
 type
 
   Grapher = object
-    allocations: Table[pointer, csize_t]
+    allocations: Table[uint64, csize_t]
     bytesAllocated: uint
     win: sdl.Window
     rend: sdl.Renderer
@@ -108,8 +108,8 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
       g.pixels[idx] = val
 
 
-proc setMap(g: var Grapher, p: pointer, size: csize_t, val: int) =
-  let pRel = cast[uint](p) mod memMax
+proc setMap(g: var Grapher, p: uint64, size: csize_t, val: int) =
+  let pRel = p mod memMax
 
   if not g.pixels.isNil and pRel < memMax:
     let nblocks = size.int div blockSize
@@ -131,7 +131,7 @@ proc handle_rec(g: var Grapher, rec: Record) =
   if rec.size > 0:
     # Handle alloc
     g.bytesAllocated += rec.size
-    g.allocations[rec.p] = rec.size
+    g.allocations[rec.p] = rec.size.csize_t
     g.setMap(rec.p, rec.size, rec.tid)
 
   else:

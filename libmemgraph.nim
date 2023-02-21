@@ -31,10 +31,10 @@ proc sendRec(rec: Record) =
 proc mark_alloc(p: pointer, size: csize_t) =
   if tid == 0:
     tid = getThreadId()
-  sendRec Record(p: p, size: size, tid: tid)
+  sendRec Record(p: cast[uint64](p), size: size.uint32, tid: tid)
 
 proc mark_free(p: pointer) =
-  sendRec Record(p: p, size: 0, tid: tid)
+  sendRec Record(p: cast[uint64](p), size: 0.uint32, tid: tid)
 
 
 # Install LD_PRELOAD hooks and fork grapher

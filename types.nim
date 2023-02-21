@@ -2,8 +2,8 @@
 type
 
   Record* = object
-    p*: pointer
-    size*: csize_t
+    p*: uint64
+    size*: uint32
     tid*: int
 
 
