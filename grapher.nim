@@ -94,7 +94,7 @@ proc drawMap(g: var Grapher) =
   discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
 
   g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
-  log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
+  #log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
 
   if not g.ffmpeg.isNil:
     let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
@@ -132,6 +132,7 @@ proc start_ffmpeg(): File =
     cmd.add " -i - "
     cmd.add " -an -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
     cmd.add " -y"
+    cmd.add " -loglevel warning"
     cmd.add " " & fname
     log cmd
     result = popen(cmd.cstring, "w")
@@ -166,7 +167,6 @@ proc grapher2(fd: cint) =
 
     if r > 0:
       let nrecs = r div Record.sizeof
-      echo "got ", nrecs
       for i in 0..<nrecs:
         g.handle_rec(recs[i])
     elif r == 0:
