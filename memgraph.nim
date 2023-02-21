@@ -80,6 +80,24 @@ proc hilbert(n: int, x, y: var int) =
     i -= 2
 
 
+proc drawMap(g: var Grapher) =
+
+  g.tex.unlockTexture()
+
+  discard g.rend.renderCopy(g.tex, nil, nil);
+  g.rend.renderPresent
+
+  var pixels: pointer
+  var pitch: cint
+  discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
+
+  g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
+  #log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
+
+  if not g.ffmpeg.isNil:
+    let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
+
+
 proc setPoint(g: var Grapher, idx: int, val: uint32) =
   if idx < idxMax:
     var x, y: int
@@ -106,26 +124,6 @@ proc setMap(g: var Grapher, p: pointer, size: csize_t, val: int) =
           g.setPoint(idx+i, color.uint32)
 
 
-
-proc drawMap(g: var Grapher) =
-
-  g.tex.unlockTexture()
-
-  discard g.rend.renderCopy(g.tex, nil, nil);
-  g.rend.renderPresent
-
-  var pixels: pointer
-  var pitch: cint
-  discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
-
-  g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
-  #log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
-
-  if not g.ffmpeg.isNil:
-    let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
-
-
-
 # Handle one alloc/free record
 
 proc handle_rec(g: var Grapher, rec: Record) =
@@ -145,9 +143,7 @@ proc handle_rec(g: var Grapher, rec: Record) =
       g.setMap(rec.p, size, 0)
       g.allocations.del rec.p
     else:
-      #log "unknown " & rec.p.repr
-      discard
-
+      log "free unknown addr " & rec.p.repr
 
 
 # Grapher main loop: read records from hook and process
@@ -166,6 +162,8 @@ proc grapher(fd: cint) =
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
   g.ffmpeg = start_ffmpeg()
+
+  g.drawMap()
 
   while true:
     var recs: array[2048, Record]

@@ -85,7 +85,8 @@ proc calloc*(nmemb, size: csize_t): pointer {.exportc,dynlib.} =
 
 proc realloc*(p: pointer, size: csize_t): pointer {.exportc,dynlib.} =
   installHooks()
-  mark_free(p)
+  if not p.isNil:
+    mark_free(p)
   result = realloc_real(p, size)
   mark_alloc(result, size)
 
