@@ -1,15 +1,22 @@
 
-example using actors tmillions:
+## Building
 
 ```
-cd actors
-nim c -d:release -d:usemalloc --mm:arc tests/tmillions.nim
+make
 ```
+
+## Usage
+
+`libmemgraph.so` is a shared library that overrids `malloc()`, `free()` and friends. It will
+fork and run the `memgraph` and send info for all allocations.
+
 
 ```
 make 
-PATH=$PATH:. MEMGRAPH_MP4=memgraph.mp4 LD_PRELOAD=./libmemgraph.so GLIBC_TUNABLES=glibc.malloc.arena_max=1 ~/sandbox/prjs/actors/tests/tmillions 
+PATH=$PATH:. LD_PRELOAD=./libmemgraph.so ~/sandbox/prjs/actors/tests/tmillions 
 ```
+
+### Recording
 
 Enable recording with:
 
@@ -17,7 +24,11 @@ Enable recording with:
 MEMGRAPH_MP4=memgraph.mp4
 ```
 
-To make glibc behave with one heap, set this env var:
+### Heaps
+
+For threaded programs, glibc will default to use more than one heap arena. This speeds
+up the allocator, but can generate confusing memgraph output. Set the following environment
+variable to make glib use only the main heap arena, which is shared by all threads:
 
 ```
 GLIBC_TUNABLES=glibc.malloc.arena_max=1
