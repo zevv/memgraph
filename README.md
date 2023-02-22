@@ -24,7 +24,7 @@ with your friends and family.
 
 ```
   +----------------+
-  |     your app   |
+  |    your app    |
   +----------------+             +--------------+
   | libmemgraph.so | ---pipe---> | memgraph gui |  [ ---pipe---> ffmpeg ]
   +----------------+             +--------------+
