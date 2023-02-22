@@ -6,7 +6,7 @@ import types
 
 type
 
-  Grapher = object
+  Grapher = ref object
     allocations: Table[uint64, csize_t]
     bytesAllocated: uint
     win: sdl.Window
@@ -163,16 +163,7 @@ proc handle_rec(g: var Grapher, rec: Record) =
       log "free unknown addr " & rec.p.repr
 
 
-# Grapher main loop: read records from hook and process
-
-proc grapher(fd: cint) =
-  
-  log "start"
-  log "memMax: " & $(memMax div 1024) & " kB"
-
-  checkSdl fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
-  signal(SIGPIPE, SIG_IGN)
-
+proc newGrapher(): Grapher =
   var g = Grapher()
 
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
@@ -191,6 +182,21 @@ proc grapher(fd: cint) =
   checkSdl g.rend.setRenderDrawColor(0, 0, 0, 1)
   checkSdl g.rend.renderClear()
   checkSdl g.rend.setRenderTarget(nil)
+
+  return g
+
+
+# Grapher main loop: read records from hook and process
+
+proc grapher(fd: cint) =
+  
+  log "start"
+  log "memMax: " & $(memMax div 1024) & " kB"
+
+  checkSdl fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
+  signal(SIGPIPE, SIG_IGN)
+
+  var g = newGrapher()
 
   g.drawMap()
 
