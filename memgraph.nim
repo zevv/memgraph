@@ -12,6 +12,8 @@ type
     win: sdl.Window
     rend: sdl.Renderer
     tex: sdl.Texture
+    texDark: sdl.Texture
+    texAccum: sdl.Texture
     pixels: ptr UncheckedArray[uint32]
     t_draw: float
     t_exit: float
@@ -76,22 +78,41 @@ proc hilbert(n: int, x, y: var int) =
     i -= 2
 
 
+template checkSdl(v: int) =
+  doAssert(v == 0)
+
+
 proc drawMap(g: var Grapher) =
 
-  # Render the allocation map
+  # Unlock so the texture can be used
   g.tex.unlockTexture()
-  discard g.rend.renderCopy(g.tex, nil, nil);
-  g.rend.renderPresent
+  
+  # Render the allocation map to the accum tex
+  checkSdl g.rend.setRenderTarget(g.texAccum)
+  checkSdl g.rend.renderCopy(g.texDark, nil, nil);
+  checkSdl g.rend.renderCopy(g.tex, nil, nil);
+ 
+  # Copy the accum tex to the output render
+  checkSdl g.rend.setRenderTarget(nil)
+  checkSdl g.rend.renderCopy(g.texAccum, nil, nil);
+  g.rend.renderPresent()
+  
+  # Send frame to ffmpeg encoder
+  if not g.ffmpeg.isNil:
+    var buf: array[width * height, uint32]
+    checkSdl g.rend.setRenderTarget(g.texAccum)
+    checkSdl g.rend.renderReadPixels(nil, PIXELFORMAT_BGRA32, cast[pointer](buf[0].addr), width * 4);
+    let w = g.ffmpeg.writeBuffer(buf[0].addr, sizeof(buf));
 
   # Get a pointer to the pixel buffer
   var pixels: pointer
   var pitch: cint
-  discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
+  checkSdl g.tex.lockTexture(nil, pixels.addr, pitch.addr)
   g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
 
-  # Send frame to ffmpeg encoder
-  if not g.ffmpeg.isNil:
-    let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
+  # Clear pixel buffer
+  zeroMem(g.pixels, width * height * 4)
+
 
 
 proc setPoint(g: var Grapher, idx: int, val: uint32) =
@@ -114,7 +135,7 @@ proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:
         var color: uint32 = if tid == 0:
-          0xff000000'u32
+          0
         else:
           colorMap[tid mod 10]
         g.setPoint(idx+i, color or 0xff000000'u32)
@@ -149,7 +170,7 @@ proc grapher(fd: cint) =
   log "start"
   log "memMax: " & $(memMax div 1024) & " kB"
 
-  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
+  checkSdl fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
   var g = Grapher()
@@ -157,10 +178,19 @@ proc grapher(fd: cint) =
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
+  g.texDark = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_TARGET, width, height)
+  g.texAccum = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_TARGET, width, height)
   g.ffmpeg = start_ffmpeg()
   
-  discard g.tex.setTextureBlendMode(BLENDMODE_BLEND)
-  discard g.rend.setRenderDrawBlendMode(BLENDMODE_BLEND)
+  checkSdl g.tex.setTextureBlendMode(BLENDMODE_BLEND)
+  checkSdl g.texDark.setTextureBlendMode(BLENDMODE_BLEND)
+  checkSdl g.texAccum.setTextureBlendMode(BLENDMODE_BLEND)
+  checkSdl g.rend.setRenderDrawBlendMode(BLENDMODE_BLEND)
+
+  checkSdl g.rend.setRenderTarget(g.texDark)
+  checkSdl g.rend.setRenderDrawColor(0, 0, 0, 2)
+  checkSdl g.rend.renderClear()
+  checkSdl g.rend.setRenderTarget(nil)
 
   g.drawMap()
 
