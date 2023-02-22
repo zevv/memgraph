@@ -16,9 +16,9 @@ hilbert space; where appropriate different colors will be used for different
 threads. The brightness of the allocations fades with time, showing you which
 allocations are new and which have been around for some time.
 
-This is not a profiler or provide precise instrumentation, but relies on the
-power of your own visual cortex to get a proper "feel" about the application's
-behavior.
+Memgraph is not a proper profiler, nor does it provide precise instrumentation.
+Instead it relies on the power of your own visual cortex to get a proper "feel"
+about the application's behavior.
 
 Optionally, the displayed graph can be recorded to a `.mp4` video for sharing
 with your friends and family.
