@@ -1,5 +1,6 @@
 
 ![Graph](/img/duc.gif)
+![Graph](/img/tmillions.gif)
 
 ## Building
 
