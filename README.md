@@ -1,4 +1,6 @@
 
+![Graph](/img/duc.gif)
+
 ## Building
 
 ```
