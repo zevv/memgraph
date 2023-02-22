@@ -188,7 +188,7 @@ proc grapher(fd: cint) =
   checkSdl g.rend.setRenderDrawBlendMode(BLENDMODE_BLEND)
 
   checkSdl g.rend.setRenderTarget(g.texDark)
-  checkSdl g.rend.setRenderDrawColor(0, 0, 0, 2)
+  checkSdl g.rend.setRenderDrawColor(0, 0, 0, 1)
   checkSdl g.rend.renderClear()
   checkSdl g.rend.setRenderTarget(nil)
 
