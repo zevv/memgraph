@@ -89,11 +89,6 @@ proc drawMap(g: var Grapher) =
   discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
   g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
 
-  # # Erase all pixels to black with a tiny bit of alpha; this will slowly
-  # # blend out older allocations
-  # for i in 0..<(width*height):
-  #   g.pixels[i] = 0x01000000'u32
-
   # Send frame to ffmpeg encoder
   if not g.ffmpeg.isNil:
     let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
@@ -119,7 +114,7 @@ proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:
         var color: uint32 = if tid == 0:
-          0
+          0xff000000'u32
         else:
           colorMap[tid mod 10]
         g.setPoint(idx+i, color or 0xff000000'u32)
