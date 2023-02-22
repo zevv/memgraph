@@ -92,6 +92,7 @@ proc realloc*(p: pointer, size: csize_t): pointer {.exportc,dynlib.} =
 
 proc free*(p: pointer) {.exportc,dynlib.} =
   installHooks()
-  mark_free(p)
+  if not p.isNil:
+    mark_free(p)
   free_real(p)
 

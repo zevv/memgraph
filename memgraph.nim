@@ -1,6 +1,7 @@
 
-import std / [tables, strutils, posix, times, os, syncio]
-import pkg / sdl2_nim / sdl
+import std/[tables, strutils, posix, times, os, syncio, math]
+import pkg/sdl2_nim/sdl
+import pkg/chroma
 import types
 
 type
@@ -21,16 +22,15 @@ const
   width = 512
   height = 512
   idxMax = width * height
+  memMaxDefault = "1024"
   fps = 30.0
-  interval = 1.0 / fps
-  colorMap = [
+  colorMap: array[10, uint32] = [
     0x00BDEB, 0x00BDEB, 0x0096FF, 0xE427FF, 0xFF00D5,
     0xFF4454, 0xDB7B00, 0x8F9C00, 0x00B300, 0x00C083,
   ]
 
 
 var
-  memMaxDefault = "1024"
   memMax: uint = (getEnv("MEMGRAPH_MEM_MAX", memMaxDefault).parseInt() * 1024 * 1024).uint
   blockSize = (memMax div idxMax).int
 
@@ -43,11 +43,7 @@ proc start_ffmpeg(): File =
     cmd.add " -s " & $width & "x" & $height
     cmd.add " -pix_fmt bgra -r " & $fps
     cmd.add " -i - "
-    #cmd.add " -i http://zevv.nl/div/.old/memgraph.mp3"
     cmd.add " -c:v libx264 -pix_fmt yuv420p -b:v 995328k "
-    #cmd.add " -c:a copy"
-    #cmd.add " -shortest"
-    #cmd.add " -map 0:0 -map 1:0"
     cmd.add " -y"
     cmd.add " -loglevel warning"
     cmd.add " " & fname
@@ -82,18 +78,23 @@ proc hilbert(n: int, x, y: var int) =
 
 proc drawMap(g: var Grapher) =
 
+  # Render the allocation map
   g.tex.unlockTexture()
-
   discard g.rend.renderCopy(g.tex, nil, nil);
   g.rend.renderPresent
 
+  # Get a pointer to the pixel buffer
   var pixels: pointer
   var pitch: cint
   discard g.tex.lockTexture(nil, pixels.addr, pitch.addr)
-
   g.pixels = cast[ptr UncheckedArray[uint32]](pixels)
-  #log $(g.bytesAllocated div 1024) & " kB in " & $g.allocations.len & " blocks"
 
+  # # Erase all pixels to black with a tiny bit of alpha; this will slowly
+  # # blend out older allocations
+  # for i in 0..<(width*height):
+  #   g.pixels[i] = 0x01000000'u32
+
+  # Send frame to ffmpeg encoder
   if not g.ffmpeg.isNil:
     let w = g.ffmpeg.writeBuffer(cast[pointer](g.pixels), 4 * width * height)
 
@@ -108,7 +109,7 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
       g.pixels[idx] = val
 
 
-proc setMap(g: var Grapher, p: uint64, size: csize_t, val: int) =
+proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
   let pRel = p mod memMax
 
   if not g.pixels.isNil and pRel < memMax:
@@ -117,11 +118,11 @@ proc setMap(g: var Grapher, p: uint64, size: csize_t, val: int) =
 
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:
-        if val == 0:
-          g.setPoint(idx+i, 0x222222)
+        var color: uint32 = if tid == 0:
+          0
         else:
-          let color = colorMap[val mod 10]
-          g.setPoint(idx+i, color.uint32)
+          colorMap[tid mod 10]
+        g.setPoint(idx+i, color or 0xff000000'u32)
 
 
 # Handle one alloc/free record
@@ -153,15 +154,18 @@ proc grapher(fd: cint) =
   log "start"
   log "memMax: " & $(memMax div 1024) & " kB"
 
-  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) and not O_NONBLOCK)
+  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
   var g = Grapher()
 
-  g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 1024, 1024, 0)
+  g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
   g.ffmpeg = start_ffmpeg()
+  
+  discard g.tex.setTextureBlendMode(BLENDMODE_BLEND)
+  discard g.rend.setRenderDrawBlendMode(BLENDMODE_BLEND)
 
   g.drawMap()
 
@@ -177,10 +181,10 @@ proc grapher(fd: cint) =
     elif r == 0:
       if g.t_exit == 0.0:
         g.t_exit = epochTime() + 1
-      os.sleep(int(interval * 1000))
+      os.sleep(1)
 
     else:
-      os.sleep(int(interval * 1000))
+      os.sleep(1)
 
     let t_now = epochTime()
 
@@ -189,7 +193,7 @@ proc grapher(fd: cint) =
 
     if t_now >= g.t_draw:
       g.drawMap()
-      g.t_draw = t_now + interval
+      g.t_draw = t_now + 1.0 / fps
 
   log "done"
 
