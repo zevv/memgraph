@@ -1,6 +1,8 @@
 
 # Memgraph
 
+> "_It's like rainbow brite vomited all over my screen._"
+
 ![Graph](/img/duc.gif)
 ![Graph](/img/tmillions.gif)
 
