@@ -75,7 +75,9 @@ Configuration for memgraph is passed by environment variables.
 - `MEMGRAPH_MP4=PATH`: Record the graph to mp4 format, write the result to the file `PATH`
 
 
-### Miscellaneous
+## Miscellaneous
+
+### Non-default allocators
 
 Memgraph only works for applications that use the default C libraries
 allocation functions `malloc()`, `calloc()`, `realloc()` and `free()`. Some
@@ -84,6 +86,8 @@ implementation instead, so memgraph will not be able to hook into those and
 graph your memory. Notably, Nim programs are default compiled with the internal
 Nim allocator. If you want to profile Nim code, make sure to compile it with
 the `-d:usemalloc` flag.
+
+### Glibc heap arenas
 
 For threaded programs, glibc will default to use more than one heap arena. This speeds
 up the allocator, but can generate confusing memgraph output. Set the following environment
