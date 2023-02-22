@@ -7,7 +7,7 @@
 Memgraph is a little tool to inspect and visualize the heap usage of your
 applications; it will give you a good idea of the general allocation behavior
 of your code and show things like fragmentation, garbage collection behavior,
-interaction between threads, etc.
+leaking rates, interaction between threads, etc.
 
 Memgraph traces all memory allocations by injecting a tiny shared library that
 overrides `malloc()` and `free()` and friends. Every allocation is real time in
