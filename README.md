@@ -77,6 +77,14 @@ Configuration for memgraph is passed by environment variables.
 
 ### Miscellaneous
 
+Memgraph only works for applications that use the default C libraries
+allocation functions `malloc()`, `calloc()`, `realloc()` and `free()`. Some
+applications try to outsmart the default allocators by providing their own
+implementation instead, so memgraph will not be able to hook into those and
+graph your memory. Notably, Nim programs are default compiled with the internal
+Nim allocator. If you want to profile Nim code, make sure to compile it with
+the `-d:usemalloc` flag.
+
 For threaded programs, glibc will default to use more than one heap arena. This speeds
 up the allocator, but can generate confusing memgraph output. Set the following environment
 variable to make glib use only the main heap arena, which is shared by all threads:
