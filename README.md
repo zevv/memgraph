@@ -20,8 +20,8 @@ Memgraph is not a proper profiler, nor does it provide precise instrumentation.
 Instead it relies on the power of your own visual cortex to get a proper "feel"
 about the application's behavior.
 
-Optionally, the displayed graph can be recorded to a `.mp4` video for sharing
-with your friends and family.
+As a bonus, the displayed graph can be recorded to a video for sharing with
+your friends and family.
 
 
 ```
