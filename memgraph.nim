@@ -1,7 +1,6 @@
 
 import std/[tables, strutils, posix, times, os, syncio, math]
 import pkg/sdl2_nim/sdl
-import pkg/chroma
 import types
 
 type
