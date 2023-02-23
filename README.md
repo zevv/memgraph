@@ -89,6 +89,11 @@ GLIBC_TUNABLES=glibc.malloc.arena_max=1
 
 ### Under the hood
 
+Memgraph consists of two parts: one small shared library that gets injected
+before starting your program using LD_PRELOAD, and the gui program that
+displays the memory allocations.
+
+
 ```
   +----------------+
   |    your app    |
