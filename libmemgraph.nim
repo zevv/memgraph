@@ -1,6 +1,5 @@
 
 import std/posix
-import std/envvars
 import posix/linux
 import types
 
@@ -22,11 +21,14 @@ var
   realloc_real {.exportc.}: fnRealloc
   free_real {.exportc.} : fnFree
 
+proc atoi(s: cstring): cint {.importc, header: "<stdlib.h>".}
+proc getenv(c: cstring): cstring {.importc, header: "<stdlib.h>".}
 
 # Send record with alloc/free info to grapher
 
 proc sendRec(rec: Record) =
-  discard write(fd_pipe, rec.addr, rec.sizeof)
+  if fd_pipe != 0:
+    discard write(fd_pipe, rec.addr, rec.sizeof)
 
 proc mark_alloc(p: pointer, size: csize_t) =
   if tid == 0:
@@ -51,23 +53,28 @@ proc installHooks() =
     calloc_real = cast[fnCalloc](dlsym(RTLD_NEXT, "calloc"))
     realloc_real = cast[fnRealloc](dlsym(RTLD_NEXT, "realloc"))
     free_real = cast[fnFree](dlsym(RTLD_NEXT, "free"))
+   
+    let e = getenv("MEMGRAPH_FD_PIPE")
+    if not e.isNil:
+      fd_pipe = atoi(e)
 
-    # Open pipes
-    var fds: array[2, cint]
-    discard pipe(fds)
-      
-    # Fork grapher process
-    delEnv("LD_PRELOAD")
-    if fork() == 0:
-      discard dup2(fds[0], 0)
-      discard close(fds[0])
-      discard close(fds[1])
-      discard execlp("memgraph", "memgraph", nil)
-      echo "error execing memgraph: ", $strerror(errno)
-      exitnow(0)
-    else:
-      discard close(fds[0])
-      fd_pipe = fds[1]
+
+   # # Open pipes
+   # var fds: array[2, cint]
+   # discard pipe(fds)
+   #   
+   # # Fork grapher process
+   # delEnv("LD_PRELOAD")
+   # if fork() == 0:
+   #   discard dup2(fds[0], 0)
+   #   discard close(fds[0])
+   #   discard close(fds[1])
+   #   discard execlp("memgraph", "memgraph", nil)
+   #   echo "error execing memgraph: ", $strerror(errno)
+   #   exitnow(0)
+   # else:
+   #   discard close(fds[0])
+   #   fd_pipe = fds[1]
 
     hooked = true
 

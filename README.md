@@ -26,17 +26,6 @@ As a bonus, the displayed graph can be recorded to a video for sharing with
 your friends and family.
 
 
-```
-  +----------------+
-  |    your app    |
-  +----------------+             +--------------+
-  | libmemgraph.so | ---pipe---> | memgraph gui |  [ ---pipe---> ffmpeg ]
-  +----------------+             +--------------+
-  |      libc      |
-  +----------------+
-```
-
-
 ## Install
 
 Memgraph is written in Nim, so you will need to have the nim compiler and
@@ -57,21 +46,17 @@ make
 
 ## Usage
 
-`libmemgraph.so` is a shared library that overrids `malloc()`, `free()` and
-friends. It will fork and run the `memgraph` and send info for all allocations.
-You will need to make sure that the `memgraph` gui binary is in your PATH.
+Just run `memgraph`, followed by your program and its optional arguments:
 
 ```
-PATH=$PATH:. LD_PRELOAD=./libmemgraph.so find /
+memgraph <cmd> [arguments]
 ```
-
-I might provide a wrapper shell script one day, or integrate this functionality
-into the `memgraph` binary.
 
 
 ## Configuration
 
-Configuration for memgraph is passed by environment variables.
+For now, configuration for memgraph is passed by environment variables. This will
+probably change to proper cmd line arguments soon.
 
 - `MEMGRAPH_MEM_MAX=N`: Configure the maximum memory size to be displayed in the graph, 
   the number in megabytes; when not specified, the default is 1024 (1Gb)
@@ -100,4 +85,19 @@ variable to make glib use only the main heap arena, which is shared by all threa
 ```
 GLIBC_TUNABLES=glibc.malloc.arena_max=1
 ````
+
+
+### Under the hood
+
+```
+  +----------------+
+  |    your app    |
+  +----------------+             +--------------+
+  | libmemgraph.so | ---pipe---> | memgraph gui |  [ ---pipe---> ffmpeg ]
+  +----------------+             +--------------+
+  |      libc      |
+  +----------------+
+```
+
+
 

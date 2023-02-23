@@ -25,6 +25,7 @@ const
   idxMax = width * height
   memMaxDefault = "1024"
   fps = 30.0
+  libmemgraph = readFile("libmemgraph.so")
   colorMap: array[10, uint32] = [
     0x00BDEB, 0x00BDEB, 0x0096FF, 0xE427FF, 0xFF00D5,
     0xFF4454, 0xDB7B00, 0x8F9C00, 0x00B300, 0x00C083,
@@ -228,5 +229,41 @@ proc grapher(fd: cint) =
   log "done"
 
 
-grapher(0)
+proc main() =
+
+  # Put the injector library in a tmp file
+  let tmpfile = "/tmp/libmemgraph.so." & $getpid()
+  writeFile(tmpfile, libmemgraph)
+  
+  # Create the pipe for passing alloc info
+  var fds: array[2, cint]
+  discard pipe(fds)
+
+  # Prepare the environment for the child process
+  var args = allocCstringArray commandLineParams()
+  var env = @[
+    "LD_PRELOAD=" & tmpfile,
+    "MEMGRAPH_FD_PIPE=" & $fds[1]
+  ]
+
+  # Fork and spawn child
+  let pid = fork()
+  if pid == 0:
+    discard close(fds[0])
+      
+    for k, v in envPairs():
+      env.add k & "=" & v
+    discard execvpe(args[0], args, allocCstringArray env)
+    exitnow(-1)
+
+  # Run the grapher GUI
+  discard close(fds[1])
+  grapher(fds[0])
+   
+  # Cleanup
+  removeFile(tmpfile)
+
+
+
+main()
 

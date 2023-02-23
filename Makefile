@@ -8,7 +8,7 @@ all: libmemgraph.so memgraph
 libmemgraph.so: libmemgraph.nim types.nim Makefile
 	nim c $(NIMFLAGS) --app:lib --out:libmemgraph.so libmemgraph.nim
 
-memgraph: memgraph.nim types.nim Makefile
+memgraph: memgraph.nim types.nim libmemgraph.so Makefile
 	nim c $(NIMFLAGS) --out:memgraph memgraph.nim 
 
 clean:
