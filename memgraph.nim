@@ -263,7 +263,8 @@ proc main() =
       
     for k, v in envPairs():
       env.add k & "=" & v
-    discard execvpe(argv[0], argv, allocCstringArray env)
+    let r = execvpe(argv[0], argv, allocCstringArray env)
+    echo "Error running ", argv[0], ": ", strerror(errno)
     exitnow(-1)
 
   # Run the grapher GUI
