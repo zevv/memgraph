@@ -49,7 +49,7 @@ make
 Just run `memgraph`, followed by your program and its optional arguments:
 
 ```
-memgraph <cmd> [arguments]
+./memgraph <cmd> [arguments]
 ```
 
 
