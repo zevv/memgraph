@@ -23,7 +23,7 @@ const
   width = 512
   height = 512
   idxMax = width * height
-  memMaxDefault = "1024"
+  memMaxDefault = "64"
   fps = 30.0
   libmemgraph = readFile("libmemgraph.so")
   colorMap: array[10, uint32] = [

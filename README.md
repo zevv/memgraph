@@ -52,6 +52,9 @@ Just run `memgraph`, followed by your program and its optional arguments:
 ./memgraph <cmd> [arguments]
 ```
 
+The default memory size displayed is 64 MB; this can be adjusted to better match your application
+by setting the `MEMGRAPH_MEM_MAX` option (see below)
+
 
 ## Configuration
 
