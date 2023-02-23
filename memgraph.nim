@@ -229,7 +229,18 @@ proc grapher(fd: cint) =
   log "done"
 
 
+proc usage() =
+  echo "usage: memgraph <cmd> [options]"
+
+
 proc main() =
+ 
+  let argc = commandLineParams().len
+  let argv = allocCstringArray commandLineParams()
+
+  if argc == 0:
+    usage()
+    quit(0)
 
   # Put the injector library in a tmp file
   let tmpfile = "/tmp/libmemgraph.so." & $getpid()
@@ -240,7 +251,6 @@ proc main() =
   discard pipe(fds)
 
   # Prepare the environment for the child process
-  var args = allocCstringArray commandLineParams()
   var env = @[
     "LD_PRELOAD=" & tmpfile,
     "MEMGRAPH_FD_PIPE=" & $fds[1]
@@ -253,7 +263,7 @@ proc main() =
       
     for k, v in envPairs():
       env.add k & "=" & v
-    discard execvpe(args[0], args, allocCstringArray env)
+    discard execvpe(argv[0], argv, allocCstringArray env)
     exitnow(-1)
 
   # Run the grapher GUI
