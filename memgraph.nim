@@ -6,6 +6,8 @@ import types
 type
 
   Grapher = ref object
+    memMax: uint64
+    blockSize: int
     allocations: Table[uint64, csize_t]
     bytesAllocated: uint
     win: sdl.Window
@@ -32,14 +34,13 @@ const
   ]
 
 
-var
-  memMax: uint = (getEnv("MEMGRAPH_MEM_MAX", memMaxDefault).parseInt() * 1024 * 1024).uint
-  blockSize = (memMax div idxMax).int
+proc log(s: string) =
+  stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
 
 
-proc start_ffmpeg(): File =
-  let fname = getEnv("MEMGRAPH_MP4")
+proc start_ffmpeg(fname: string): File =
   if fname != "":
+    log "writing video to " & fname
     var cmd = "ffmpeg"
     cmd.add " -f rawvideo -vcodec rawvideo"
     cmd.add " -s " & $width & "x" & $height
@@ -49,12 +50,8 @@ proc start_ffmpeg(): File =
     cmd.add " -y"
     cmd.add " -loglevel warning"
     cmd.add " " & fname
-    log cmd
+    #log cmd
     result = popen(cmd.cstring, "w")
-
-
-proc log(s: string) =
-  stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
 
 
 proc hilbert(n: int, x, y: var int) =
@@ -126,11 +123,11 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
 
 
 proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
-  let pRel = p mod memMax
+  let pRel = p mod g.memMax
 
-  if not g.pixels.isNil and pRel < memMax:
-    let nblocks = size.int div blockSize
-    let idx = pRel.int div blockSize
+  if not g.pixels.isNil and pRel < g.memMax:
+    let nblocks = size.int div g.blockSize
+    let idx = pRel.int div g.blockSize
 
     for i in 0..nBlocks:
       if idx >= 0 and idx < idxMax:
@@ -171,7 +168,6 @@ proc newGrapher(): Grapher =
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
   g.texDark = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_TARGET, width, height)
   g.texAccum = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_TARGET, width, height)
-  g.ffmpeg = start_ffmpeg()
   
   checkSdl g.tex.setTextureBlendMode(BLENDMODE_BLEND)
   checkSdl g.texDark.setTextureBlendMode(BLENDMODE_BLEND)
@@ -188,17 +184,21 @@ proc newGrapher(): Grapher =
 
 # Grapher main loop: read records from hook and process
 
-proc grapher(fd: cint) =
-  
-  log "start"
-  log "memMax: " & $(memMax div 1024) & " kB"
+proc grapher(memMax: uint64, fname_ffmpeg: string, fd: cint) =
 
-  checkSdl fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
+  discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
   var g = newGrapher()
 
+  g.memMax = memMax * 1024 * 1024
+  g.blockSize = (g.memMax div idxMax).int
+  g.ffmpeg = start_ffmpeg(fname_ffmpeg)
+
   g.drawMap()
+  
+  log "start"
+  log "memMax: " & $(g.memMax div 1024) & " kB"
 
   while true:
     var recs: array[2048, Record]
@@ -230,15 +230,41 @@ proc grapher(fd: cint) =
 
 
 proc usage() =
-  echo "usage: memgraph <cmd> [options]"
+  echo "usage: memgraph [options] <cmd> [cmd options]"
+  echo ""
+  echo "options:"
+  echo "  -h        show help"
+  echo "  -m MB     set max memory size [64]"
+  echo "  -v FNAME  write video to FNAME. Must end at .mp4"
 
 
 proc main() =
- 
-  let argc = commandLineParams().len
-  let argv = allocCstringArray commandLineParams()
 
-  if argc == 0:
+  var
+    optMemMax = 64'u64
+    optFfmpeg = ""
+ 
+  let argv = commandLineParams()
+  let argc = argv.len
+  var idx = 0
+  
+  while idx < argc:
+    case argv[idx]
+    of "-h":
+      usage()
+      quit(0)
+    of "-m":
+      inc idx
+      optMemMax = parseInt(argv[idx]).uint64
+      inc idx
+    of "-v":
+      inc idx
+      optFfmpeg = argv[idx]
+      inc idx
+    else:
+      break
+  
+  if idx == argc:
     usage()
     quit(0)
 
@@ -250,15 +276,19 @@ proc main() =
   var fds: array[2, cint]
   discard pipe(fds)
 
-  # Prepare the environment for the child process
-  var env = @[
-    "LD_PRELOAD=" & tmpfile,
-    "MEMGRAPH_FD_PIPE=" & $fds[1]
-  ]
 
   # Fork and spawn child
   let pid = fork()
   if pid == 0:
+  
+    # Prepare the environment for the child process
+    var env = @[
+      "LD_PRELOAD=" & tmpfile,
+      "MEMGRAPH_FD_PIPE=" & $fds[1]
+    ]
+
+    var argv = allocCstringArray(argv[idx..^1])
+
     discard close(fds[0])
       
     for k, v in envPairs():
@@ -269,7 +299,7 @@ proc main() =
 
   # Run the grapher GUI
   discard close(fds[1])
-  grapher(fds[0])
+  grapher(optMemMax, optFfmpeg, fds[0])
    
   # Cleanup
   removeFile(tmpfile)

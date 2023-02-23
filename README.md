@@ -52,19 +52,27 @@ Just run `memgraph`, followed by your program and its optional arguments:
 ./memgraph <cmd> [arguments]
 ```
 
-The default memory size displayed is 64 MB; this can be adjusted to better match your application
-by setting the `MEMGRAPH_MEM_MAX` option (see below)
+Full help:
+
+```
+usage: memgraph [options] <cmd> [cmd options]
+
+options:
+  -h        show help
+  -m SIZE   set max memory size in MB [64]
+  -v FNAME  write video to FNAME. Must end at .mp4
+```
 
 
 ## Configuration
 
-For now, configuration for memgraph is passed by environment variables. This will
-probably change to proper cmd line arguments soon.
+Memgraph has a few options which can be configured with command line
+arguments:
 
-- `MEMGRAPH_MEM_MAX=N`: Configure the maximum memory size to be displayed in the graph, 
+- `-m SIZE`: Configure the maximum memory size to be displayed in the graph, 
   the number in megabytes; when not specified, the default is 1024 (1Gb)
 
-- `MEMGRAPH_MP4=PATH`: Record the graph to mp4 format, write the result to the file `PATH`
+- `-v FNAME`: Record the graph to mp4 format, write the result to the file `PATH`
 
 
 ## Miscellaneous
