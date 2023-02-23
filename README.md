@@ -14,9 +14,9 @@ leaking rates, interaction between threads, etc.
 Memgraph traces all memory allocations by injecting a tiny shared library that
 overrides `malloc()` and `free()` and friends. Every allocation is drawn in
 real time in a little gui window with the relative addresses mapped to 2D
-hilbert space; where appropriate different colors will be used for different
-threads. The brightness of the allocations fades with time, showing you which
-allocations are new and which have been around for some time.
+hilbert space; where different colors will be used for different threads. The
+brightness of the allocations fades with time, showing you which allocations
+are new and which have been around for some time.
 
 Memgraph is not a proper profiler, nor does it provide precise instrumentation.
 Instead it relies on the power of your own visual cortex to get a proper "feel"
@@ -47,12 +47,6 @@ make
 ## Usage
 
 Just run `memgraph`, followed by your program and its optional arguments:
-
-```
-./memgraph <cmd> [arguments]
-```
-
-Full help:
 
 ```
 usage: memgraph [options] <cmd> [cmd options]
