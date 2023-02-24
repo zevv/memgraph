@@ -9,4 +9,5 @@ installExt    = @["nim"]
 # Dependencies
 
 requires "nim"
+requires "npeg"
 requires "sdl2_nim"

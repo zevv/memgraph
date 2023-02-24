@@ -1,12 +1,18 @@
 
 import std/[tables, strutils, posix, times, os, syncio, math]
 import pkg/sdl2_nim/sdl
+import pkg/npeg
 import types
 
 type
 
   Grapher = ref object
+    # Configuration
     memMax: uint64
+    videoPath: string
+    argv: seq[string]
+    # Runtime
+    ffmpeg: File
     blockSize: int
     allocations: Table[uint64, csize_t]
     bytesAllocated: uint
@@ -18,14 +24,12 @@ type
     pixels: ptr UncheckedArray[uint32]
     t_draw: float
     t_exit: float
-    ffmpeg: File
 
 
 const
   width = 512
   height = 512
   idxMax = width * height
-  memMaxDefault = "64"
   fps = 30.0
   libmemgraph = readFile("libmemgraph.so")
   colorMap: array[10, uint32] = [
@@ -79,7 +83,7 @@ template checkSdl(v: int) =
   doAssert(v == 0)
 
 
-proc drawMap(g: var Grapher) =
+proc drawMap(g: Grapher) =
 
   # Unlock so the texture can be used
   g.tex.unlockTexture()
@@ -112,7 +116,7 @@ proc drawMap(g: var Grapher) =
 
 
 
-proc setPoint(g: var Grapher, idx: int, val: uint32) =
+proc setPoint(g: Grapher, idx: int, val: uint32) =
   if idx < idxMax:
     var x, y: int
     when true:
@@ -122,7 +126,7 @@ proc setPoint(g: var Grapher, idx: int, val: uint32) =
       g.pixels[idx] = val
 
 
-proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
+proc setMap(g: Grapher, p: uint64, size: csize_t, tid: int) =
   let pRel = p mod g.memMax
 
   if not g.pixels.isNil and pRel < g.memMax:
@@ -140,7 +144,7 @@ proc setMap(g: var Grapher, p: uint64, size: csize_t, tid: int) =
 
 # Handle one alloc/free record
 
-proc handle_rec(g: var Grapher, rec: Record) =
+proc handle_rec(g: Grapher, rec: Record) =
 
   if rec.size > 0:
     # Handle alloc
@@ -163,6 +167,7 @@ proc handle_rec(g: var Grapher, rec: Record) =
 proc newGrapher(): Grapher =
   var g = Grapher()
 
+  g.memMax = 64 * 1024 * 1024
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
@@ -184,21 +189,18 @@ proc newGrapher(): Grapher =
 
 # Grapher main loop: read records from hook and process
 
-proc grapher(memMax: uint64, fname_ffmpeg: string, fd: cint) =
+proc run(g: Grapher, fd: cint) =
+  
+  log "start"
+  log "memMax: " & $(g.memMax div 1024) & " kB"
 
   discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
-  var g = newGrapher()
-
-  g.memMax = memMax * 1024 * 1024
   g.blockSize = (g.memMax div idxMax).int
-  g.ffmpeg = start_ffmpeg(fname_ffmpeg)
+  g.ffmpeg = start_ffmpeg(g.videoPath)
 
   g.drawMap()
-  
-  log "start"
-  log "memMax: " & $(g.memMax div 1024) & " kB"
 
   while true:
     var recs: array[2048, Record]
@@ -233,40 +235,36 @@ proc usage() =
   echo "usage: memgraph [options] <cmd> [cmd options]"
   echo ""
   echo "options:"
-  echo "  -h        show help"
-  echo "  -m MB     set max memory size [64]"
-  echo "  -v FNAME  write video to FNAME. Must end at .mp4"
+  echo "  -h  --help         show help"
+  echo "  -m  --memmax=MB    set max memory size [64]"
+  echo "  -v  --video=FNAME  write video to FNAME. Must end at .mp4"
+
+
+proc parseCmdLine(g: Grapher) =
+  var g = g
+  let parser = peg parser:
+    sep <- '\x1f'
+    eq <- ?{'=',':','\x1f'}
+    parser <- *opt * cmd
+    opt <- (optMemMax | optVideo | optHelp) * sep
+    optMemMax <- ("-m" | "--memmax") * eq * >+Digit:
+      g.memMax = parseInt($1).uint64 * 1024 * 1024
+    optVideo <- ("-v" | "--video") * eq * >+(1-sep):
+      g.videoPath = $1
+    optHelp <- ("-h" | "--help"):
+      usage(); quit(0)
+    cmd <- >+1:
+      g.argv = split($1, '\x1f')
+
+  if not parser.match(commandLineParams().join("\x1f")).ok:
+    usage()
+    quit 1
 
 
 proc main() =
-
-  var
-    optMemMax = 64'u64
-    optFfmpeg = ""
  
-  let argv = commandLineParams()
-  let argc = argv.len
-  var idx = 0
-  
-  while idx < argc:
-    case argv[idx]
-    of "-h":
-      usage()
-      quit(0)
-    of "-m":
-      inc idx
-      optMemMax = parseInt(argv[idx]).uint64
-      inc idx
-    of "-v":
-      inc idx
-      optFfmpeg = argv[idx]
-      inc idx
-    else:
-      break
-  
-  if idx == argc:
-    usage()
-    quit(0)
+  var g = newGrapher()
+  g.parseCmdLine()
 
   # Put the injector library in a tmp file
   let tmpfile = "/tmp/libmemgraph.so." & $getpid()
@@ -276,30 +274,25 @@ proc main() =
   var fds: array[2, cint]
   discard pipe(fds)
 
-
   # Fork and spawn child
   let pid = fork()
   if pid == 0:
-  
+    discard close(fds[0])
     # Prepare the environment for the child process
     var env = @[
       "LD_PRELOAD=" & tmpfile,
       "MEMGRAPH_FD_PIPE=" & $fds[1]
     ]
-
-    var argv = allocCstringArray(argv[idx..^1])
-
-    discard close(fds[0])
-      
     for k, v in envPairs():
       env.add k & "=" & v
+    var argv = allocCstringArray(g.argv)
     let r = execvpe(argv[0], argv, allocCstringArray env)
     echo "Error running ", argv[0], ": ", strerror(errno)
     exitnow(-1)
 
   # Run the grapher GUI
   discard close(fds[1])
-  grapher(optMemMax, optFfmpeg, fds[0])
+  g.run(fds[0])
    
   # Cleanup
   removeFile(tmpfile)
