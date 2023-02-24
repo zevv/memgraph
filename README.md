@@ -68,14 +68,17 @@ Memgraph has a few options which can be configured with command line
 arguments:
 
 - `-m  --memmax=MB    set max memory size [64]`
+
   Configure the maximum memory size to be displayed in the graph, 
   the number in megabytes; when not specified, the default is 1024 (1Gb)
 
 - `-v  --video=FNAME  write video to FNAME. Must be .mp4`
+
   Record the graph to mp4 format, write the result to the file `PATH`.
   To use this option you need a working installation of ffmpeg on your machine.
 
 - `-s  --space=SPACE  set 2D space mapping [hilbert]`
+
   Configure the way for mapping memory addresses to a pixel on the screen. 
   The default setting is `hilbert, which provides nice locality.
 
