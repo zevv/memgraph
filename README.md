@@ -52,9 +52,13 @@ Just run `memgraph`, followed by your program and its optional arguments:
 usage: memgraph [options] <cmd> [cmd options]
 
 options:
-  -h        show help
-  -m SIZE   set max memory size in MB [64]
-  -v FNAME  write video to FNAME. Must end at .mp4
+  -h  --help         show help
+  -m  --memmax=MB    set max memory size [64]
+  -v  --video=FNAME  write video to FNAME. Must be .mp4
+  -s  --space=SPACE  set 2D space mapping [hilbert]
+
+available 2D space mappings:
+  hilbert, linear
 ```
 
 
@@ -63,10 +67,17 @@ options:
 Memgraph has a few options which can be configured with command line
 arguments:
 
-- `-m SIZE`: Configure the maximum memory size to be displayed in the graph, 
+- `-m  --memmax=MB    set max memory size [64]`
+  Configure the maximum memory size to be displayed in the graph, 
   the number in megabytes; when not specified, the default is 1024 (1Gb)
 
-- `-v FNAME`: Record the graph to mp4 format, write the result to the file `PATH`
+- `-v  --video=FNAME  write video to FNAME. Must be .mp4`
+  Record the graph to mp4 format, write the result to the file `PATH`.
+  To use this option you need a working installation of ffmpeg on your machine.
+
+- `-s  --space=SPACE  set 2D space mapping [hilbert]`
+  Configure the way for mapping memory addresses to a pixel on the screen. 
+  The default setting is `hilbert, which provides nice locality.
 
 
 ## Miscellaneous
