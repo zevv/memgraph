@@ -6,11 +6,14 @@ import types
 
 type
 
+  Space = enum Hilbert, Linear
+
   Grapher = ref object
     # Configuration
     memMax: uint64
     videoPath: string
     argv: seq[string]
+    space: Space
     # Runtime
     ffmpeg: File
     blockSize: int
@@ -32,9 +35,9 @@ const
   idxMax = width * height
   fps = 30.0
   libmemgraph = readFile("libmemgraph.so")
-  colorMap: array[10, uint32] = [
-    0x00BDEB, 0x00BDEB, 0x0096FF, 0xE427FF, 0xFF00D5,
-    0xFF4454, 0xDB7B00, 0x8F9C00, 0x00B300, 0x00C083,
+  colorMap = [
+    0xff00BDEB'u32, 0xff00BDEB'u32, 0xff0096FF'u32, 0xffE427FF'u32, 0xffFF00D5'u32,
+    0xffFF4454'u32, 0xffDB7B00'u32, 0xff8F9C00'u32, 0xff00B300'u32, 0xff00C083'u32,
   ]
 
 
@@ -115,11 +118,10 @@ proc drawMap(g: Grapher) =
   zeroMem(g.pixels, width * height * 4)
 
 
-
 proc setPoint(g: Grapher, idx: int, val: uint32) =
   if idx < idxMax:
     var x, y: int
-    when true:
+    if g.space == Hilbert:
       hilbert(idx, x, y)
       g.pixels[y*width + x] = val
     else:
@@ -127,19 +129,17 @@ proc setPoint(g: Grapher, idx: int, val: uint32) =
 
 
 proc setMap(g: Grapher, p: uint64, size: csize_t, tid: int) =
-  let pRel = p mod g.memMax
+  let 
+    p = p mod g.memMax
+    nblocks = size.int div g.blockSize
+    idx = p.int div g.blockSize
 
-  if not g.pixels.isNil and pRel < g.memMax:
-    let nblocks = size.int div g.blockSize
-    let idx = pRel.int div g.blockSize
-
-    for i in 0..nBlocks:
-      if idx >= 0 and idx < idxMax:
-        var color: uint32 = if tid == 0:
-          0
-        else:
-          colorMap[tid mod 10]
-        g.setPoint(idx+i, color or 0xff000000'u32)
+  for i in 0..nBlocks:
+    var color: uint32 = if tid != 0:
+      colorMap[tid mod 10]
+    else:
+      0xff000000'u32
+    g.setPoint(idx+i, color)
 
 
 # Handle one alloc/free record
@@ -237,20 +237,29 @@ proc usage() =
   echo "options:"
   echo "  -h  --help         show help"
   echo "  -m  --memmax=MB    set max memory size [64]"
-  echo "  -v  --video=FNAME  write video to FNAME. Must end at .mp4"
+  echo "  -v  --video=FNAME  write video to FNAME. Must be .mp4"
+  echo "  -s  --space=SPACE  set 2D space mapping [hilbert]"
+  echo ""
+  echo "available 2D space mappings:"
+  echo "  hilbert, linear"
 
 
 proc parseCmdLine(g: Grapher) =
-  var g = g
+  var g = g # Nim bug?
   let parser = peg parser:
     sep <- '\x1f'
     eq <- ?{'=',':','\x1f'}
     parser <- *opt * cmd
-    opt <- (optMemMax | optVideo | optHelp) * sep
+    opt <- (optMemMax | optVideo | optHelp | optSpace) * sep
     optMemMax <- ("-m" | "--memmax") * eq * >+Digit:
       g.memMax = parseInt($1).uint64 * 1024 * 1024
     optVideo <- ("-v" | "--video") * eq * >+(1-sep):
       g.videoPath = $1
+    optSpace <- ("-s" | "--space") * eq * (hilbert | linear)
+    hilbert <- "hilbert" | "h":
+      g.space = Hilbert
+    linear <- "linear" | "l":
+      g.space = Linear
     optHelp <- ("-h" | "--help"):
       usage(); quit(0)
     cmd <- >+1:
@@ -267,27 +276,25 @@ proc main() =
   g.parseCmdLine()
 
   # Put the injector library in a tmp file
-  let tmpfile = "/tmp/libmemgraph.so." & $getpid()
+  let tmpfile = "/tmp/libmemgraph.so." & $getuid()
   writeFile(tmpfile, libmemgraph)
   
   # Create the pipe for passing alloc info
   var fds: array[2, cint]
   discard pipe(fds)
 
-  # Fork and spawn child
+  # Fork and exec child
   let pid = fork()
   if pid == 0:
     discard close(fds[0])
-    # Prepare the environment for the child process
     var env = @[
       "LD_PRELOAD=" & tmpfile,
       "MEMGRAPH_FD_PIPE=" & $fds[1]
     ]
     for k, v in envPairs():
       env.add k & "=" & v
-    var argv = allocCstringArray(g.argv)
-    let r = execvpe(argv[0], argv, allocCstringArray env)
-    echo "Error running ", argv[0], ": ", strerror(errno)
+    let r = execvpe(g.argv[0], allocCstringArray g.argv, allocCstringArray env)
+    echo "Error running ", g.argv[0], ": ", strerror(errno)
     exitnow(-1)
 
   # Run the grapher GUI
@@ -296,7 +303,6 @@ proc main() =
    
   # Cleanup
   removeFile(tmpfile)
-
 
 
 main()
