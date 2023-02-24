@@ -61,15 +61,15 @@ proc start_ffmpeg(fname: string): File =
     result = popen(cmd.cstring, "w")
 
 
-proc hilbert(n: int, x, y: var int) =
+proc hilbert(n: int): tuple[x, y: int] =
 
   const
     transform_table = [[0,1,2,3],[0,2,1,3],[3,2,1,0],[3,1,2,0]]
     locations = [0,1,3,2]
     transforms = [1,0,0,3]
 
-  x = 0
-  y = 0
+  var x = 0
+  var y = 0
   var trans = 0
   var i = 16
 
@@ -80,6 +80,13 @@ proc hilbert(n: int, x, y: var int) =
     y = (y shl 1) or ((bits shr 0) and 1)
     trans = trans xor transforms[m]
     i -= 2
+  (x, y)
+
+
+proc calcHilbertMap(): seq[int] =
+  for idx in 0..<width*height:
+    let (x, y) = hilbert(idx)
+    result.add y*width + x
 
 
 template checkSdl(v: int) =
@@ -118,28 +125,25 @@ proc drawMap(g: Grapher) =
   zeroMem(g.pixels, width * height * 4)
 
 
-proc setPoint(g: Grapher, idx: int, val: uint32) =
-  if idx < idxMax:
-    var x, y: int
-    if g.space == Hilbert:
-      hilbert(idx, x, y)
-      g.pixels[y*width + x] = val
-    else:
-      g.pixels[idx] = val
-
-
 proc setMap(g: Grapher, p: uint64, size: csize_t, tid: int) =
-  let 
-    p = p mod g.memMax
-    nblocks = size.int div g.blockSize
-    idx = p.int div g.blockSize
 
-  for i in 0..nBlocks:
-    var color: uint32 = if tid != 0:
-      colorMap[tid mod 10]
-    else:
-      0xff000000'u32
-    g.setPoint(idx+i, color)
+  let p = p mod g.memMax
+  let nblocks = size.int div g.blockSize
+  var idx = p.int div g.blockSize
+  let color = if tid != 0: colorMap[tid mod 10] else: 0xff000000'u32
+  const hilbertMap = calcHilbertMap()
+    
+  if g.space == Hilbert:
+    for i in 0..nBlocks:
+      if idx < idxMax:
+        let idx2 = hilbertMap[idx]
+        g.pixels[idx2] = color
+        inc idx
+  else:
+    for i in 0..nBlocks:
+      if idx < idxMax:
+        g.pixels[idx] = color
+        inc idx
 
 
 # Handle one alloc/free record
@@ -165,9 +169,10 @@ proc handle_rec(g: Grapher, rec: Record) =
 
 
 proc newGrapher(): Grapher =
-  var g = Grapher()
+  Grapher(memmax: 64 * 1024 * 1024)
 
-  g.memMax = 64 * 1024 * 1024
+
+proc init(g: Grapher) =
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
@@ -184,8 +189,6 @@ proc newGrapher(): Grapher =
   checkSdl g.rend.renderClear()
   checkSdl g.rend.setRenderTarget(nil)
 
-  return g
-
 
 # Grapher main loop: read records from hook and process
 
@@ -201,6 +204,8 @@ proc run(g: Grapher, fd: cint) =
   g.ffmpeg = start_ffmpeg(g.videoPath)
 
   g.drawMap()
+
+  g.t_draw = epochTime()
 
   while true:
     var recs: array[2048, Record]
@@ -226,7 +231,7 @@ proc run(g: Grapher, fd: cint) =
 
     if t_now >= g.t_draw:
       g.drawMap()
-      g.t_draw = t_now + 1.0 / fps
+      g.t_draw += 1.0 / fps
 
   log "done"
 
@@ -278,6 +283,7 @@ proc main() =
  
   var g = newGrapher()
   g.parseCmdLine()
+  g.init()
 
   # Put the injector library in a tmp file
   let tmpfile = "/tmp/libmemgraph.so." & $getuid()
