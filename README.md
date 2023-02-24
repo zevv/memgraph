@@ -61,6 +61,11 @@ available 2D space mappings:
   hilbert, linear
 ```
 
+This is a nice example command to see memgraph at work:
+
+```
+./memgraph -m 1 find / -xdev
+```
 
 ## Configuration
 
