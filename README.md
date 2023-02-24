@@ -31,11 +31,13 @@ your friends and family.
 Memgraph is written in Nim, so you will need to have the nim compiler and
 nimble tool available on your system.
 
+
 ## Dependencies
 
-- Nim, a fairly recent version
-- Nim sdl2_nim SDL2 glue library
+- A fairly recent version of the Nim compiler
+- Nim libraries sdl2_nim and npeg (will be downloaded by Nimble for you)
 - Optionally, a working installation of ffmpeg for recording videos
+
 
 ## Building
 
@@ -43,6 +45,7 @@ nimble tool available on your system.
 nimble develop
 make
 ```
+
 
 ## Usage
 
@@ -66,6 +69,7 @@ This is a nice example command to see memgraph at work:
 ```
 ./memgraph -m 1 find / -xdev
 ```
+
 
 ## Configuration
 
@@ -100,6 +104,7 @@ graph your memory. Notably, Nim programs are default compiled with the internal
 Nim allocator. If you want to profile Nim code, make sure to compile it with
 the `-d:usemalloc` flag.
 
+
 ### Glibc heap arenas
 
 For threaded programs, glibc will default to use more than one heap arena. This speeds
@@ -127,6 +132,5 @@ displays the memory allocations.
   |      libc      |
   +----------------+
 ```
-
 
 
