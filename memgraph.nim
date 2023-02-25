@@ -1,5 +1,5 @@
 
-import std/[tables, strutils, posix, times, os, syncio, math]
+import std/[tables, strutils, posix, times, os, syncio, math, posix]
 import pkg/sdl2_nim/sdl
 import pkg/npeg
 import types
@@ -14,6 +14,7 @@ type
     videoPath: string
     argv: seq[string]
     space: Space
+    debug: bool
     # Runtime
     ffmpeg: File
     blockSize: int
@@ -41,13 +42,17 @@ const
   ]
 
 
-proc log(s: string) =
-  stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
+proc log(g: Grapher, s: string) =
+  if g.debug:
+    stderr.write "\e[1;34m[memgraph ", s, "]\e[0m\n"
+
+proc wrn(g: Grapher, s: string) =
+  stderr.write "\e[1;31m[memgraph ", s, "]\e[0m\n"
 
 
-proc start_ffmpeg(fname: string): File =
+proc start_ffmpeg(g: Grapher, fname: string) =
   if fname != "":
-    log "writing video to " & fname
+    g.log "writing video to " & fname
     var cmd = "ffmpeg"
     cmd.add " -f rawvideo -vcodec rawvideo"
     cmd.add " -s " & $width & "x" & $height
@@ -57,8 +62,7 @@ proc start_ffmpeg(fname: string): File =
     cmd.add " -y"
     cmd.add " -loglevel warning"
     cmd.add " " & fname
-    #log cmd
-    result = popen(cmd.cstring, "w")
+    g.ffmpeg = popen(cmd.cstring, "w")
 
 
 proc hilbert(n: int): tuple[x, y: int] =
@@ -165,7 +169,7 @@ proc handle_rec(g: Grapher, rec: Record) =
       g.setMap(rec.p, size, 0)
       g.allocations.del rec.p
     else:
-      log "free unknown addr " & rec.p.repr
+      g.log "free unknown addr " & rec.p.repr
 
 
 proc newGrapher(): Grapher =
@@ -194,14 +198,13 @@ proc init(g: Grapher) =
 
 proc run(g: Grapher, fd: cint) =
   
-  log "start"
-  log "memMax: " & $(g.memMax div 1024) & " kB"
+  g.log "memMax: " & $(g.memMax div 1024) & " kB"
 
   discard fcntl(fd, F_SETFL, fcntl(0, F_GETFL) or O_NONBLOCK)
   signal(SIGPIPE, SIG_IGN)
 
   g.blockSize = (g.memMax div idxMax).int
-  g.ffmpeg = start_ffmpeg(g.videoPath)
+  g.start_ffmpeg(g.videoPath)
 
   g.drawMap()
 
@@ -233,13 +236,14 @@ proc run(g: Grapher, fd: cint) =
       g.drawMap()
       g.t_draw += 1.0 / fps
 
-  log "done"
+  g.log "done"
 
 
 proc usage() =
   echo "usage: memgraph [options] <cmd> [cmd options]"
   echo ""
   echo "options:"
+  echo "  -d  --debug        enable debug logging"
   echo "  -h  --help         show help"
   echo "  -m  --memmax=MB    set max memory size [64]"
   echo "  -v  --video=FNAME  write video to FNAME. Must be .mp4"
@@ -255,7 +259,9 @@ proc parseCmdLine(g: Grapher) =
     parser <- (*opt * cmd * !1) | E"Syntax error"
     sep <- '\x1f'
     eq <- ?{'=',':','\x1f'}
-    opt <- (optMemMax | optVideo | optHelp | optSpace) * sep
+    opt <- (optDebug | optMemMax | optVideo | optHelp | optSpace) * sep
+    optDebug <- ("-d" | "--debug"):
+      g.debug = true
     optMemMax <- ("-m" | "--memmax") * eq * (>+Digit | E"Not a number"):
       g.memMax = parseInt($1).uint64 * 1024 * 1024
     optVideo <- ("-v" | "--video") * eq * >+(1-sep):
@@ -286,19 +292,31 @@ proc main() =
   g.init()
 
   # Put the injector library in a tmp file
-  let tmpfile = "/tmp/libmemgraph.so." & $getuid()
-  writeFile(tmpfile, libmemgraph)
+  var soDir = getenv("XDG_RUNTIME_DIR")
+  if soDir == "": soDir = "/tmp"
+  let soFile = soDir & "/libmemgraph.so." & $getuid()
+  writeFile(soFile, libmemgraph)
+  g.log "injecting " & soFile
+
+  # Ensure the shlib is usable at this place
+  let p = dlopen(soFile, RTLD_NOW)
+  if p.isNil:
+    g.wrn $dlerror()
+    quit 1
+  else:
+    discard dlclose(p)
   
   # Create the pipe for passing alloc info
   var fds: array[2, cint]
   discard pipe(fds)
 
   # Fork and exec child
+  g.log "starting subprocess: " & g.argv.join(" ")
   let pid = fork()
   if pid == 0:
     discard close(fds[0])
     var env = @[
-      "LD_PRELOAD=" & tmpfile,
+      "LD_PRELOAD=" & soFile,
       "MEMGRAPH_FD_PIPE=" & $fds[1]
     ]
     for k, v in envPairs():
@@ -312,7 +330,7 @@ proc main() =
   g.run(fds[0])
    
   # Cleanup
-  removeFile(tmpfile)
+  removeFile(soFile)
 
 
 main()
