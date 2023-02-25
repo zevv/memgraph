@@ -177,7 +177,7 @@ proc newGrapher(): Grapher =
 
 
 proc init(g: Grapher) =
-  g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, 512, 512, 0)
+  g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, width, height, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
   g.texDark = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_TARGET, width, height)
@@ -247,10 +247,7 @@ proc usage() =
   echo "  -h  --help         show help"
   echo "  -m  --memmax=MB    set max memory size [64]"
   echo "  -v  --video=FNAME  write video to FNAME. Must be .mp4"
-  echo "  -s  --space=SPACE  set 2D space mapping [hilbert]"
-  echo ""
-  echo "available 2D space mappings:"
-  echo "  hilbert, linear"
+  echo "  -s  --space=SPACE  set 2D space mapping (hilbert,linear) [hilbert]"
 
 
 proc parseCmdLine(g: Grapher) =
