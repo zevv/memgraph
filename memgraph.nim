@@ -253,7 +253,7 @@ proc usage() =
 proc parseCmdLine(g: Grapher) =
   var g = g # Nim bug?
   let parser = peg parser:
-    parser <- (*opt * cmd * !1) | E"Syntax error"
+    parser <- (*opt * cmd * !1)
     sep <- '\x1f'
     eq <- ?{'=',':','\x1f'}
     opt <- (optDebug | optMemMax | optVideo | optHelp | optSpace) * sep
@@ -275,6 +275,9 @@ proc parseCmdLine(g: Grapher) =
 
   try:
     discard parser.match(commandLineParams().join("\x1f"))
+    if g.argv.len == 0:
+      usage()
+      quit 0
   except:
     echo "Error parsing command line: ", getCurrentExceptionMsg()
     echo ""
