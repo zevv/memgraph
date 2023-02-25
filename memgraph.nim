@@ -19,7 +19,6 @@ type
     ffmpeg: File
     blockSize: int
     allocations: Table[uint64, csize_t]
-    bytesAllocated: uint
     win: sdl.Window
     rend: sdl.Renderer
     tex: sdl.Texture
@@ -156,27 +155,21 @@ proc handle_rec(g: Grapher, rec: Record) =
 
   if rec.size > 0:
     # Handle alloc
-    g.bytesAllocated += rec.size
     g.allocations[rec.p] = rec.size.csize_t
     g.setMap(rec.p, rec.size, rec.tid)
 
   else:
     # Handle free
-    var size: int
-    if rec.p in g.allocations:
-      let size = g.allocations[rec.p]
-      g.bytesAllocated -= size
-      g.setMap(rec.p, size, 0)
-      g.allocations.del rec.p
-    else:
-      g.log "free unknown addr " & rec.p.repr
+    let size = g.allocations.getOrDefault(rec.p)
+    g.setMap(rec.p, size, 0)
+    g.allocations.del rec.p
 
 
 proc newGrapher(): Grapher =
   Grapher(memmax: 64 * 1024 * 1024)
 
 
-proc init(g: Grapher) =
+proc initGui(g: Grapher) =
   g.win = createWindow("memgraph", WindowPosUndefined, WindowPosUndefined, width, height, 0)
   g.rend = createRenderer(g.win, -1, sdl.RendererAccelerated and sdl.RendererPresentVsync)
   g.tex = createTexture(g.rend, PIXELFORMAT_BGRA32, TEXTUREACCESS_STREAMING, width, height)
@@ -236,7 +229,10 @@ proc run(g: Grapher, fd: cint) =
       g.drawMap()
       g.t_draw += 1.0 / fps
 
-  g.log "done"
+  var blocks = g.allocations.len
+  var bytes: csize_t
+  for _, b in g.allocations: bytes += b
+  g.log "done, " & $bytes & " still allocated in " & $blocks & " blocks"
 
 
 proc usage() =
@@ -289,7 +285,7 @@ proc main() =
  
   var g = newGrapher()
   g.parseCmdLine()
-  g.init()
+  g.initGui()
 
   # Put the injector library in a tmp file
   var soDir = getenv("XDG_RUNTIME_DIR")
