@@ -315,13 +315,9 @@ proc main() =
   let pid = fork()
   if pid == 0:
     discard close(fds[0])
-    var env = @[
-      "LD_PRELOAD=" & soFile,
-      "MEMGRAPH_FD_PIPE=" & $fds[1]
-    ]
-    for k, v in envPairs():
-      env.add k & "=" & v
-    let r = execvpe(g.argv[0], allocCstringArray g.argv, allocCstringArray env)
+    putEnv("LD_PRELOAD", soFile)
+    putEnv("MEMGRAPH_FD_PIPE", $fds[1])
+    let r = execvp(g.argv[0], allocCstringArray g.argv)
     echo "Error running ", g.argv[0], ": ", strerror(errno)
     exitnow(-1)
 
