@@ -35,6 +35,7 @@ nimble tool available on your system.
 ## Dependencies
 
 - A fairly recent version of the Nim compiler
+- SDL2 libraries + header files, (`libsdl2-dev` or similar)
 - Nim libraries sdl2_nim and npeg (will be downloaded by Nimble for you)
 - Optionally, a working installation of ffmpeg for recording videos
 
